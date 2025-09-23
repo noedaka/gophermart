@@ -57,10 +57,8 @@ func AuthMiddleware(next http.Handler) http.Handler {
 				return
 			}
 
-			type contextKey string
-			const userIDKey contextKey = "userID"
 
-			ctx := context.WithValue(r.Context(), userIDKey, int64(userID))
+			ctx := context.WithValue(r.Context(), config.UserIDKey, int64(userID))
 			r = r.WithContext(ctx)
 		} else {
 			http.Error(w, "Invalid token claims", http.StatusUnauthorized)

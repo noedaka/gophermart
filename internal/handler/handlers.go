@@ -2,9 +2,11 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"gophermart/internal/config"
 	"gophermart/internal/model"
 	"gophermart/internal/service"
+	"io"
 	"net/http"
 	"time"
 
@@ -103,4 +105,73 @@ func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	})
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Handler) CreateOrderHandler(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(config.UserIDKey).(int64)
+	if !ok {
+		http.Error(w, "User ID not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Error reading request body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	if len(bodyBytes) == 0 {
+		http.Error(w, "Empty request body", http.StatusBadRequest)
+		return
+	}
+
+	code := string(bodyBytes)
+
+	if !service.Luhn(code) {
+		http.Error(w, "Error reading request body", http.StatusUnprocessableEntity)
+		return
+	}
+
+	err = h.service.CreateOrder(r.Context(), userID, code)
+
+	switch err {
+	case nil:
+		w.WriteHeader(http.StatusAccepted)
+		return
+	case config.ErrOrderAlreadyUploadedByUser:
+		w.WriteHeader(http.StatusOK)
+		return
+	case config.ErrOrderAlreadyUploadedByAnother:
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	default:
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h *Handler) GetOrdersHandler(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(config.UserIDKey).(int64)
+	if !ok {
+		http.Error(w, "User ID not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	orders, err := h.service.GetOrders(r.Context(), userID)
+	if errors.Is(err, config.ErrNoOrders) {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	} else if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusOK)
+    
+    if err := json.NewEncoder(w).Encode(orders); err != nil {
+        http.Error(w, "Error encoding response", http.StatusInternalServerError)
+        return
+    }
 }

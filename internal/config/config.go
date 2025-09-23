@@ -6,8 +6,6 @@ import (
 	"github.com/caarlos0/env/v6"
 )
 
-var JWTSecret = []byte ("my-super-secret-key-for-testing")
-
 type Config struct {
 	ServerAdress         string `env:"RUN_ADDRESS"`
 	DatabaseDSN          string `env:"DATABASE_URI"`
@@ -17,7 +15,7 @@ type Config struct {
 const (
 	defaultServerAddress        = "localhost:8080"
 	defaultDatabaseDSN          = "postgres://postgres:admin@localhost:5432/gophermart?sslmode=disable"
-	defaultAccrualSystemAddress = "" //TODO
+	defaultAccrualSystemAddress = "C:/Projects/dev/practicum/gophermart/cmd/accrual"
 )
 
 func Init() (*Config, error) {

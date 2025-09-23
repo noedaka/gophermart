@@ -5,5 +5,5 @@ CREATE TABLE users (
 CREATE TABLE users_credentials (
 	user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
 	login VARCHAR(128) NOT NULL UNIQUE,
-	password TEXT NOT NULL
+	password VARCHAR(128) NOT NULL
 );

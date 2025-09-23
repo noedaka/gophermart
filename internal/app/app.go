@@ -58,6 +58,9 @@ func Run() error {
 
 				r.Group(func(r chi.Router) {
 					r.Use(middleware.AuthMiddleware)
+
+					r.Post("/orders", handler.CreateOrderHandler)
+					r.Get("/orders", handler.GetOrdersHandler)
 				})
 			})
 		})
