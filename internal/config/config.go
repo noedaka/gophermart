@@ -12,12 +12,6 @@ type Config struct {
 	AccrualSystemAddress string `env:"ACCRUAL_SYSTEM_ADDRESS"`
 }
 
-const (
-	defaultServerAddress        = "localhost:8080"
-	defaultDatabaseDSN          = "postgres://postgres:admin@localhost:5432/gophermart?sslmode=disable"
-	defaultAccrualSystemAddress = "C:/Projects/dev/practicum/gophermart/cmd/accrual"
-)
-
 func Init() (*Config, error) {
 	cfg := &Config{}
 
@@ -29,16 +23,6 @@ func Init() (*Config, error) {
 	flag.StringVar(&cfg.DatabaseDSN, "d", cfg.DatabaseDSN, "Database DSN")
 	flag.StringVar(&cfg.AccrualSystemAddress, "r", cfg.AccrualSystemAddress, "Accrual system address")
 	flag.Parse()
-
-	if cfg.ServerAdress == "" {
-		cfg.ServerAdress = defaultServerAddress
-	}
-	if cfg.DatabaseDSN == "" {
-		cfg.DatabaseDSN = defaultDatabaseDSN
-	}
-	if cfg.AccrualSystemAddress == "" {
-		cfg.AccrualSystemAddress = defaultAccrualSystemAddress
-	}
 
 	return cfg, nil
 }

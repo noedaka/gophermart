@@ -16,7 +16,9 @@ func InitDB(db *sql.DB) error {
 
 	_, err = tx.Exec(`
 		CREATE TABLE IF NOT EXISTS users (
-			id BIGSERIAL PRIMARY KEY  
+			id BIGSERIAL PRIMARY KEY,
+			current REAL DEFAULT 0,
+    		withdrawn REAL DEFAULT 0
 		);
 
 		CREATE TABLE IF NOT EXISTS users_credentials (
@@ -32,6 +34,14 @@ func InitDB(db *sql.DB) error {
 			uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
 			status VARCHAR(50),
 			accrual REAL DEFAULT 0
+		);
+		
+		CREATE TABLE IF NOT EXISTS withdrawals (
+			id BIGSERIAL PRIMARY KEY,
+			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			order_number VARCHAR(255) NOT NULL UNIQUE,
+			sum REAL NOT NULL CHECK (sum > 0),
+			processed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 		);
 	`)
 

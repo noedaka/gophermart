@@ -11,6 +11,9 @@ type Service interface {
 	Register(ctx context.Context, credentials model.UserCredentials) (int64, error)
 	CreateOrder(ctx context.Context, userID int64, orderNumber string) error
 	GetOrders(ctx context.Context, userID int64) ([]model.Order, error)
+	GetBalance(ctx context.Context, userID int64) (*model.Balance, error)
+	CreateWithdrawal(ctx context.Context, userID int64, withdrawal model.Withdrawal) error
+	GetWithdrawals(ctx context.Context, userID int64) ([]model.WithdrawalData, error)
 }
 
 type service struct {
@@ -35,4 +38,16 @@ func (s *service) CreateOrder(ctx context.Context, userID int64, orderNumber str
 
 func (s *service) GetOrders(ctx context.Context, userID int64) ([]model.Order, error) {
 	return s.userRepo.GetOrdersByUserID(ctx, userID)
+}
+
+func (s *service) GetBalance(ctx context.Context, userID int64) (*model.Balance, error) {
+	return s.userRepo.GetBalance(ctx, userID)
+}
+
+func (s *service) CreateWithdrawal(ctx context.Context, userID int64, withdrawal model.Withdrawal) error {
+	return s.userRepo.CreateWithdrawal(ctx, userID, withdrawal)
+}
+
+func (s *service) GetWithdrawals(ctx context.Context, userID int64) ([]model.WithdrawalData, error) {
+	return s.userRepo.GetWithdrawals(ctx, userID)
 }

@@ -1,0 +1,7 @@
+CREATE TABLE withdrawals (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    number VARCHAR(255) NOT NULL UNIQUE,
+    sum REAL NOT NULL CHECK (sum >= 0),
+    processed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);

@@ -62,7 +62,7 @@ func (repo *Repository) GetOrdersByUserID(ctx context.Context, userID int64) ([]
 			tx.Rollback()
 		}
 	}()
-	
+
 	rows, err := tx.QueryContext(ctx,
 		`SELECT number, uploaded_at, status, accrual 
         FROM orders 
@@ -106,6 +106,20 @@ func (repo *Repository) GetOrdersByUserID(ctx context.Context, userID int64) ([]
 	if err = tx.Commit(); err != nil {
 		return nil, err
 	}
-	
+
 	return orders, nil
+}
+
+func (repo *Repository) GetBalance(ctx context.Context, userID int64) (*model.Balance, error) {
+	var balance model.Balance
+
+	err := repo.db.QueryRowContext(ctx,
+		"SELECT current, withdrawn FROM users WHERE id = $1", userID,
+	).Scan(&balance.Current, &balance.Withdrawn)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &balance, nil
 }

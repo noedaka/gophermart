@@ -1,5 +1,7 @@
 CREATE TABLE users (
-	id BIGSERIAL PRIMARY KEY  
+	id BIGSERIAL PRIMARY KEY,
+	current REAL DEFAULT 0,
+    withdrawn REAL DEFAULT 0
 );
 
 CREATE TABLE users_credentials (

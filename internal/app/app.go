@@ -1,32 +1,22 @@
 package app
 
 import (
+	"context"
 	"database/sql"
+	"gophermart/internal/client"
 	"gophermart/internal/config"
 	dbConfig "gophermart/internal/config/db"
 	"gophermart/internal/handler"
 	"gophermart/internal/middleware"
 	"gophermart/internal/repository"
 	"gophermart/internal/service"
+	"gophermart/internal/worker"
 	"net/http"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/go-chi/chi/v5"
 )
-
-type App struct {
-	Service service.Service
-}
-
-func NewApp(db *sql.DB) *App {
-	userRepo := repository.NewRepo(db)
-	service := service.NewService(userRepo)
-
-	return &App{
-		Service: service,
-	}
-}
 
 func Run() error {
 	cfg, err := config.Init()
@@ -43,9 +33,13 @@ func Run() error {
 		return err
 	}
 
-	app := NewApp(db)
+	userRepo := repository.NewRepo(db)
+	service := service.NewService(userRepo)
+	accrualClient := client.NewClient(cfg.AccrualSystemAddress)
+    accrualWorker := worker.NewWorker(userRepo, accrualClient)
+	go accrualWorker.Start(context.Background())
 
-	handler := handler.NewHandler(app.Service)
+	handler := handler.NewHandler(service)
 
 	r := chi.NewRouter()
 
@@ -61,6 +55,9 @@ func Run() error {
 
 					r.Post("/orders", handler.CreateOrderHandler)
 					r.Get("/orders", handler.GetOrdersHandler)
+					r.Get("/balance", handler.GetBalanceHandler)
+					r.Post("/balance/withdraw", handler.CreateWithdrawalHandler)
+					r.Get("/withdrawals", handler.GetWithdrawalsHandler)
 				})
 			})
 		})

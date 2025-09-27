@@ -168,10 +168,95 @@ func (h *Handler) GetOrdersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(http.StatusOK)
-    
-    if err := json.NewEncoder(w).Encode(orders); err != nil {
-        http.Error(w, "Error encoding response", http.StatusInternalServerError)
-        return
-    }
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(orders); err != nil {
+		http.Error(w, "Error encoding response", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h *Handler) GetBalanceHandler(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(config.UserIDKey).(int64)
+	if !ok {
+		http.Error(w, "User ID not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	balance, err := h.service.GetBalance(r.Context(), userID)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(balance); err != nil {
+		http.Error(w, "Error encoding response", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h *Handler) CreateWithdrawalHandler(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(config.UserIDKey).(int64)
+	if !ok {
+		http.Error(w, "User ID not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	var withdrawal model.Withdrawal
+
+	if err := json.NewDecoder(r.Body).Decode(&withdrawal); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if !service.Luhn(withdrawal.Number) {
+		http.Error(w, "not correct code", http.StatusUnprocessableEntity)
+		return
+	}
+
+	err := h.service.CreateWithdrawal(r.Context(), userID, withdrawal)
+
+	switch err {
+	case nil:
+		w.WriteHeader(http.StatusOK)
+		return
+	case config.ErrNotEnoughMoney:
+		http.Error(w, err.Error(), http.StatusPaymentRequired)
+		return
+	case config.ErrOrderAlreadyUploadedByUser:
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		return
+	default:
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h *Handler) GetWithdrawalsHandler(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(config.UserIDKey).(int64)
+	if !ok {
+		http.Error(w, "User ID not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	withdrawals, err := h.service.GetWithdrawals(r.Context(), userID)
+	if errors.Is(err, config.ErrNoOrders) {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	} else if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(withdrawals); err != nil {
+		http.Error(w, "Error encoding response", http.StatusInternalServerError)
+		return
+	}
 }
