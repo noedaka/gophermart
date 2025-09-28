@@ -14,10 +14,6 @@ func (repo *Repository) GetOrdersForProcessing(ctx context.Context, limit int) (
         LIMIT $1
     `, limit)
 
-	if rows.Err() != nil {
-		return nil, rows.Err()
-	}
-
 	if err != nil {
 		return nil, err
 	}
@@ -32,6 +28,10 @@ func (repo *Repository) GetOrdersForProcessing(ctx context.Context, limit int) (
 		}
 
 		orders = append(orders, order)
+	}
+
+	if rows.Err() != nil {
+		return nil, rows.Err()
 	}
 
 	return orders, nil
