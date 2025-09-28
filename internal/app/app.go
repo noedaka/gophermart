@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"gophermart/internal/client"
 	"gophermart/internal/config"
-	dbConfig "gophermart/internal/config/db"
+	dbconfig "gophermart/internal/config/db"
 	"gophermart/internal/handler"
 	"gophermart/internal/middleware"
 	"gophermart/internal/repository"
@@ -29,14 +29,14 @@ func Run() error {
 		return err
 	}
 
-	if err := dbConfig.InitDB(db); err != nil {
+	if err := dbconfig.InitDB(db); err != nil {
 		return err
 	}
 
 	userRepo := repository.NewRepo(db)
 	service := service.NewService(userRepo)
 	accrualClient := client.NewClient(cfg.AccrualSystemAddress)
-    accrualWorker := worker.NewWorker(userRepo, accrualClient)
+	accrualWorker := worker.NewWorker(userRepo, accrualClient)
 	go accrualWorker.Start(context.Background())
 
 	handler := handler.NewHandler(service)

@@ -11,13 +11,13 @@ import (
 
 type Client struct {
 	BaseURL    string
-	HttpClient *http.Client
+	HTTPClient *http.Client
 }
 
 func NewClient(baseURL string) *Client {
 	return &Client{
 		BaseURL: baseURL,
-		HttpClient: &http.Client{
+		HTTPClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
 	}
@@ -26,7 +26,7 @@ func NewClient(baseURL string) *Client {
 func (c *Client) GetOrderInfo(orderNumber string) (*model.AccrualResponse, error) {
 	url := fmt.Sprintf("%s/api/orders/%s", c.BaseURL, orderNumber)
 
-	resp, err := c.HttpClient.Get(url)
+	resp, err := c.HTTPClient.Get(url)
 	if err != nil {
 		return nil, err
 	}

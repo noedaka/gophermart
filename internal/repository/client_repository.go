@@ -14,6 +14,10 @@ func (repo *Repository) GetOrdersForProcessing(ctx context.Context, limit int) (
         LIMIT $1
     `, limit)
 
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+
 	if err != nil {
 		return nil, err
 	}
