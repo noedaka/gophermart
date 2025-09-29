@@ -67,18 +67,7 @@ func (repo *Repository) CreateWithdrawal(ctx context.Context, userID int64, with
 }
 
 func (repo *Repository) GetWithdrawals(ctx context.Context, userID int64) ([]model.WithdrawalData, error) {
-	tx, err := repo.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		}
-	}()
-
-	rows, err := tx.QueryContext(ctx,
+	rows, err := repo.db.QueryContext(ctx,
 		`SELECT number, sum, processed_at 
         FROM withdrawals 
         WHERE user_id = $1 
@@ -115,10 +104,6 @@ func (repo *Repository) GetWithdrawals(ctx context.Context, userID int64) ([]mod
 
 	if len(withdrawals) == 0 {
 		return nil, config.ErrNoOrders
-	}
-
-	if err = tx.Commit(); err != nil {
-		return nil, err
 	}
 
 	return withdrawals, nil

@@ -52,18 +52,7 @@ func (repo *Repository) CreateOrder(ctx context.Context, userID int64, orderNumb
 }
 
 func (repo *Repository) GetOrdersByUserID(ctx context.Context, userID int64) ([]model.Order, error) {
-	tx, err := repo.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		}
-	}()
-
-	rows, err := tx.QueryContext(ctx,
+	rows, err := repo.db.QueryContext(ctx,
 		`SELECT number, uploaded_at, status, accrual 
         FROM orders 
         WHERE user_id = $1 
@@ -101,10 +90,6 @@ func (repo *Repository) GetOrdersByUserID(ctx context.Context, userID int64) ([]
 
 	if len(orders) == 0 {
 		return nil, config.ErrNoOrders
-	}
-
-	if err = tx.Commit(); err != nil {
-		return nil, err
 	}
 
 	return orders, nil

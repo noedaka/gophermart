@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"gophermart/internal/model"
+	"time"
 )
 
 func (repo *Repository) GetOrdersForProcessing(ctx context.Context, limit int) ([]model.Order, error) {
@@ -38,6 +39,9 @@ func (repo *Repository) GetOrdersForProcessing(ctx context.Context, limit int) (
 }
 
 func (repo *Repository) UpdateOrderAccrual(ctx context.Context, order model.AccrualResponse) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+    defer cancel()
+	
 	tx, err := repo.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
