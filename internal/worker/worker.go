@@ -20,7 +20,7 @@ func NewWorker(repo *repository.Repository, client *client.Client) *Worker {
 	return &Worker{
 		repo:      repo,
 		client:    client,
-		interval:  5 * time.Second,
+		interval:  1 * time.Millisecond,
 		batchSize: 10,
 	}
 }
