@@ -9,10 +9,10 @@ type UserCredentials struct {
 }
 
 type Order struct {
-	Number     string `json:"number"`
-	Status     string `json:"status"`
-	Accrual    int    `json:"accrual,omitempty"`
-	UploadedAt string `json:"uploaded_at"`
+	Number     string  `json:"number"`
+	Status     string  `json:"status"`
+	Accrual    float32 `json:"accrual,omitempty"`
+	UploadedAt string  `json:"uploaded_at"`
 }
 
 type Balance struct {
