@@ -7,6 +7,7 @@ import (
 	"gophermart/internal/repository"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -16,41 +17,44 @@ type Worker struct {
 	workers      int
 	batchSize    int
 	pollInterval time.Duration
+	
+	// Механизм координированной паузы
+	pauseUntil   atomic.Value
+	jobs         chan model.Order
 }
 
 func NewWorker(repo *repository.Repository, client *client.Client, workers int) *Worker {
-	return &Worker{
+	w := &Worker{
 		repo:         repo,
 		client:       client,
 		workers:      workers,
 		batchSize:    10,
 		pollInterval: 1 * time.Second,
+		jobs:         make(chan model.Order, workers*2),
 	}
+	w.pauseUntil.Store(time.Time{})
+	return w
 }
 
 func (w *Worker) Start(ctx context.Context) {
-	jobs := make(chan model.Order, w.workers*2)
 	var wg sync.WaitGroup
 
 	for i := 0; i < w.workers; i++ {
 		wg.Add(1)
-		go w.worker(ctx, &wg, jobs, i)
+		go w.worker(ctx, &wg, i)
 	}
 
-	// Запускаем планировщик заданий
 	wg.Add(1)
-	go w.scheduler(ctx, &wg, jobs)
+	go w.scheduler(ctx, &wg)
 
 	log.Printf("Accrual worker pool started with %d workers", w.workers)
 
-	// Ждем завершения всех горутин
 	wg.Wait()
 	log.Println("Accrual worker pool stopped")
 }
 
-func (w *Worker) scheduler(ctx context.Context, wg *sync.WaitGroup, jobs chan<- model.Order) {
+func (w *Worker) scheduler(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
-	defer close(jobs)
 
 	ticker := time.NewTicker(w.pollInterval)
 	defer ticker.Stop()
@@ -60,12 +64,16 @@ func (w *Worker) scheduler(ctx context.Context, wg *sync.WaitGroup, jobs chan<- 
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			w.fetchAndDispatchOrders(ctx, jobs)
+			w.fetchAndDispatchOrders(ctx)
 		}
 	}
 }
 
-func (w *Worker) fetchAndDispatchOrders(ctx context.Context, jobs chan<- model.Order) {
+func (w *Worker) fetchAndDispatchOrders(ctx context.Context) {
+	if w.isPaused() {
+		return
+	}
+
 	orders, err := w.repo.GetOrdersForProcessing(ctx, w.batchSize)
 	if err != nil {
 		log.Printf("Error getting orders for processing: %v", err)
@@ -73,8 +81,12 @@ func (w *Worker) fetchAndDispatchOrders(ctx context.Context, jobs chan<- model.O
 	}
 
 	for _, order := range orders {
+		if w.isPaused() {
+			return
+		}
+
 		select {
-		case jobs <- order:
+		case w.jobs <- order:
 		case <-ctx.Done():
 			return
 		default:
@@ -84,14 +96,22 @@ func (w *Worker) fetchAndDispatchOrders(ctx context.Context, jobs chan<- model.O
 	}
 }
 
-func (w *Worker) worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan model.Order, workerID int) {
+func (w *Worker) worker(ctx context.Context, wg *sync.WaitGroup, workerID int) {
 	defer wg.Done()
 
 	for {
+		// Проверяем паузу перед получением задачи
+		if pauseUntil := w.getPauseUntil(); !pauseUntil.IsZero() {
+			if !w.waitForPause(ctx, pauseUntil, workerID) {
+				return 
+			}
+			continue 
+		}
+
 		select {
 		case <-ctx.Done():
 			return
-		case order, ok := <-jobs:
+		case order, ok := <-w.jobs:
 			if !ok {
 				return
 			}
@@ -101,13 +121,17 @@ func (w *Worker) worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan mod
 }
 
 func (w *Worker) processOrder(ctx context.Context, order model.Order, workerID int) {
+	if w.isPaused() {
+		return
+	}
+
 	log.Printf("Worker %d processing order %s", workerID, order.Number)
 
 	orderInfo, err := w.client.GetOrderInfo(order.Number)
 	if err != nil {
 		if tooManyRequests, ok := err.(*client.TooManyRequestsError); ok {
-			log.Printf("Worker %d got 429 error, sleeping for %v", workerID, tooManyRequests.RetryAfter)
-			w.handleTooManyRequests(ctx, tooManyRequests.RetryAfter)
+			log.Printf("Worker %d got 429 error, pausing ALL workers for %v", workerID, tooManyRequests.RetryAfter)
+			w.pauseAllWorkers(tooManyRequests.RetryAfter)
 			return
 		}
 		log.Printf("Worker %d error getting order info for %s: %v", workerID, order.Number, err)
@@ -125,14 +149,46 @@ func (w *Worker) processOrder(ctx context.Context, order model.Order, workerID i
 	}
 }
 
-func (w *Worker) handleTooManyRequests(ctx context.Context, retryAfter time.Duration) {
-	timer := time.NewTimer(retryAfter)
+func (w *Worker) pauseAllWorkers(retryAfter time.Duration) {
+	pauseUntil := time.Now().Add(retryAfter)
+	w.setPauseUntil(pauseUntil)
+	log.Printf("ALL workers paused until %v", pauseUntil.Format("15:04:05.000"))
+}
+
+func (w *Worker) waitForPause(ctx context.Context, pauseUntil time.Time, workerID int) bool {
+	now := time.Now()
+	if now.After(pauseUntil) {
+		w.setPauseUntil(time.Time{})
+		return true
+	}
+
+	sleepDuration := pauseUntil.Sub(now)
+	log.Printf("Worker %d waiting for pause to end: %v", workerID, sleepDuration)
+
+	timer := time.NewTimer(sleepDuration)
 	defer timer.Stop()
 
 	select {
 	case <-ctx.Done():
-		return
+		return false
 	case <-timer.C:
-		// Время ожидания истекло, продолжаем работу
+		// Пауза завершена, сбрасываем состояние
+		w.setPauseUntil(time.Time{})
+		log.Printf("Worker %d pause completed, resuming work", workerID)
+		return true
 	}
+}
+
+
+func (w *Worker) setPauseUntil(pauseUntil time.Time) {
+	w.pauseUntil.Store(pauseUntil)
+}
+
+func (w *Worker) getPauseUntil() time.Time {
+	return w.pauseUntil.Load().(time.Time)
+}
+
+func (w *Worker) isPaused() bool {
+	pauseUntil := w.getPauseUntil()
+	return !pauseUntil.IsZero() && time.Now().Before(pauseUntil)
 }
