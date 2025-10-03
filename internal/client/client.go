@@ -9,6 +9,14 @@ import (
 	"time"
 )
 
+type TooManyRequestsError struct {
+	RetryAfter time.Duration
+}
+
+func (e *TooManyRequestsError) Error() string {
+	return fmt.Sprintf("too many requests, retry after %v", e.RetryAfter)
+}
+
 type Client struct {
 	BaseURL    string
 	HTTPClient *http.Client
@@ -45,13 +53,11 @@ func (c *Client) GetOrderInfo(orderNumber string) (*model.AccrualResponse, error
 
 	case http.StatusTooManyRequests:
 		retryAfter := resp.Header.Get("Retry-After")
-		delay, _ := strconv.Atoi(retryAfter)
-		if delay == 0 {
+		delay, err := strconv.Atoi(retryAfter)
+		if err != nil || delay == 0 {
 			delay = 60
 		}
-		time.Sleep(time.Duration(delay) * time.Second)
-		// Рекурсивно повторяем запрос после паузы
-		return c.GetOrderInfo(orderNumber)
+		return nil, &TooManyRequestsError{RetryAfter: time.Duration(delay) * time.Second}
 
 	default:
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)

@@ -3,8 +3,10 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"gophermart/internal/config"
 	"gophermart/internal/model"
+	"log"
 	"time"
 )
 
@@ -15,9 +17,11 @@ func (repo *Repository) CreateWithdrawal(ctx context.Context, userID int64, with
 	}
 
 	defer func() {
-		if err != nil {
-			tx.Rollback()
-		}
+    if err := tx.Rollback(); err != nil {
+        if !errors.Is(err, sql.ErrTxDone) {
+            log.Printf("failed to rollback the transaction: %v", err) 
+        }
+    }
 	}()
 
 	var currentBalance float32

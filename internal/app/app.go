@@ -11,12 +11,19 @@ import (
 	"gophermart/internal/repository"
 	"gophermart/internal/service"
 	"gophermart/internal/worker"
+	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/go-chi/chi/v5"
 )
+
+const workersCount = 3
 
 func Run() error {
 	cfg, err := config.Init()
@@ -29,15 +36,19 @@ func Run() error {
 		return err
 	}
 
-	if err := dbconfig.InitDB(db); err != nil {
+	if err := dbconfig.Migrate(db); err != nil {
 		return err
 	}
 
 	userRepo := repository.NewRepo(db)
 	service := service.NewService(userRepo)
 	accrualClient := client.NewClient(cfg.AccrualSystemAddress)
-	accrualWorker := worker.NewWorker(userRepo, accrualClient)
-	go accrualWorker.Start(context.Background())
+	accrualWorker := worker.NewWorker(userRepo, accrualClient, workersCount)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go accrualWorker.Start(ctx)
 
 	handler := handler.NewHandler(service)
 
@@ -63,9 +74,36 @@ func Run() error {
 		})
 	})
 
-	if err := http.ListenAndServe(cfg.ServerAdress, r); err != nil {
-		return err
+	server := &http.Server{
+		Addr:    cfg.ServerAdress,
+		Handler: r,
 	}
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			cancel()
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("Shutting down server...")
+
+	// Graceful shutdown серва
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Server shutdown error: %v", err)
+	}
+
+	// Останавливаем воркеры 
+	log.Println("Stopping workers...")
+	cancel()
+
+	time.Sleep(1 * time.Second)
 
 	return nil
 }

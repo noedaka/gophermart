@@ -6,6 +6,7 @@ import (
 	"errors"
 	"gophermart/internal/auth"
 	"gophermart/internal/model"
+	"log"
 )
 
 func (repo *Repository) GetUserByCredentials(ctx context.Context, userCredentials model.UserCredentials) (int64, error) {
@@ -37,9 +38,11 @@ func (repo *Repository) CreateUserWithCredentials(ctx context.Context, userCrede
 	}
 
 	defer func() {
-		if err != nil {
-			tx.Rollback()
-		}
+    if err := tx.Rollback(); err != nil {
+        if !errors.Is(err, sql.ErrTxDone) {
+            log.Printf("failed to rollback the transaction: %v", err)
+        }
+    }
 	}()
 
 	isFree, err := repo.isLoginFree(ctx, userCredentials.Login)

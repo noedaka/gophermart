@@ -2,8 +2,10 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"gophermart/internal/model"
-	"time"
+	"log"
 )
 
 func (repo *Repository) GetOrdersForProcessing(ctx context.Context, limit int) ([]model.Order, error) {
@@ -39,14 +41,17 @@ func (repo *Repository) GetOrdersForProcessing(ctx context.Context, limit int) (
 }
 
 func (repo *Repository) UpdateOrderAccrual(ctx context.Context, order model.AccrualResponse) error {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-    defer cancel()
-	
 	tx, err := repo.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() {
+    if err := tx.Rollback(); err != nil {
+        if !errors.Is(err, sql.ErrTxDone) {
+            log.Printf("failed to rollback the transaction: %v", err)
+        }
+    }
+	}()
 
 	_, err = tx.ExecContext(ctx, `
         UPDATE orders SET status = $1, accrual = $2	
